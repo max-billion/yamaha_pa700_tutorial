@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Korg Pa700 — Interactive Control Panel &amp; Arranger Trainer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Trainer Top Toolbar -->
+    <header class="trainer-topbar">
+      <div class="topbar-title">
+        <span class="topbar-badge">KORG Pa700</span>
+        <div>
+          <h1>Control Panel &amp; Auto-Arranger Gig Trainer</h1>
+          <div class="topbar-subtitle">Every hardware button, LED, TouchView screen, Split Point &amp; Arranger section emulated from the OS v1.5 manual</div>
+        </div>
+      </div>
+      <div class="topbar-controls">
+        <button id="btnToggleDrills" class="tb-btn drill-btn">Guided Gig Crash Course (3 Drills)</button>
+        <button id="btnToggleCabinet" class="tb-btn" title="Switch between large zoomed control panel and full speaker-cabinet view">Full Cabinet View (Speakers)</button>
+        <button id="btnMatchPhoto" class="tb-btn" title="Set panel LEDs and SongBook Set List screen to match upscaled_full_control_panel.png">Load Reference Photo State</button>
+        <button id="btnFactoryReset" class="tb-btn" title="Return to default Pa700 Style Play startup state">Power-On Default State</button>
+      </div>
+    </header>
+
+    <!-- Interactive Step-by-Step Guided Drills -->
+    <section id="drillDrawer" class="drill-drawer">
+      <div class="drill-header">
+        <div id="drillTabs" class="drill-tabs"></div>
+        <button id="btnCloseDrills" class="tb-btn">Close Drills</button>
+      </div>
+      <div class="drill-step-row">
+        <div id="drillPrompt" class="drill-prompt"></div>
+        <div class="drill-nav">
+          <button id="btnPrevStep" class="tb-btn">&larr; Prev</button>
+          <span id="drillStepCounter" style="font-size:12px;color:#a7f3d0;font-weight:700;"></span>
+          <button id="btnNextStep" class="tb-btn">Next &rarr;</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Hardware Cabinet + Control Panel -->
+    <main id="cabinetWrapper" class="cabinet-wrapper">
+      <!-- Left Speaker Grille Wing (shown in Full Cabinet View) -->
+      <div class="speaker-wing left">
+        <div class="wing-oriental-mount">
+          <div class="oriental-brand-label">
+            ORIENTAL
+            <small>QUARTER TONE<br/>SUB SCALE</small>
+          </div>
+          <div id="wingOrientalContainer" style="flex:1;"></div>
+        </div>
+      </div>
+
+      <!-- Brushed Bronze-Burgundy Control Panel Faceplate -->
+      <div id="faceplate" class="faceplate">
+        <!-- Silkscreen Branding -->
+        <div class="silk-pa700">
+          <div class="model">Pa700</div>
+          <div class="sub">PROFESSIONAL ARRANGER</div>
+        </div>
+        <div class="silk-touchview">
+          <span class="tv-box">&#9664;</span><span>TouchView</span>
+        </div>
+        <div class="silk-korg-bezel">KORG</div>
+
+        <div class="silk-right-logos">
+          <div class="logo-badge">GENERAL<br/>MIDI 2</div>
+          <div class="logo-badge rx">RX<br/><span style="font-size:72%">TECHNOLOGY</span></div>
+          <div class="logo-badge">DNC<br/><span style="font-size:68%">CONTROL</span></div>
+        </div>
+
+        <!-- Silkscreen Group Header Lines -->
+        <div class="silk-group-bar" style="left:2.4%;width:9.2%;top:50.8%;">
+          <span class="line"></span><span>&#9664; ASSIGNABLE KNOBS &#9654;</span><span class="line"></span>
+        </div>
+        <div class="silk-group-bar" style="left:12.8%;width:12.2%;top:35.2%;">
+          <span class="line"></span><span>&#9664; MODE &#9654;</span><span class="line"></span>
+        </div>
+        <div id="btnDemoCombo" class="silk-bracket-demo" title="Click to trigger DEMO mode (STYLE PLAY + SONG PLAY)">
+          &#9492; DEMO &#9496;
+        </div>
+        <div class="silk-group-bar" style="left:15.8%;width:13.2%;top:51.8%;">
+          <span class="line"></span><span>&#9664; PLAYER &#9654;</span><span class="line"></span>
+        </div>
+
+        <!-- Row 3 Silkscreen Group Headers -->
+        <div class="silk-group-bar" style="left:14.0%;width:14.6%;top:68.0%;">
+          <span class="line"></span><span>&#9664; PADS &#9654;</span><span class="line"></span>
+        </div>
+        <div class="silk-group-bar" style="left:42.2%;width:13.1%;top:68.0%;">
+          <span class="line"></span><span>&#9664; KEYBOARD SET &#9654;</span><span class="line"></span>
+        </div>
+        <div class="silk-group-bar" style="left:63.8%;width:11.8%;top:67.2%;">
+          <span class="line"></span><span>&#9664; TEMPO &#9654;</span><span class="line"></span>
+        </div>
+        <div class="silk-group-bar" style="left:84.2%;width:6.0%;top:68.0%;">
+          <span>&#9664; UPPER OCTAVE &#9654;</span>
+        </div>
+        <div class="silk-group-bar" style="left:91.4%;width:6.0%;top:68.0%;">
+          <span>&#9664; TRANSPOSE &#9654;</span>
+        </div>
+
+        <!-- Row 4 Silkscreen Group Headers -->
+        <div class="silk-group-bar" style="left:1.3%;width:9.1%;top:80.8%;">
+          <span class="line"></span><span>&#9664; INTRO &#9654;</span><span class="line"></span>
+        </div>
+        <div class="silk-group-bar" style="left:11.6%;width:12.4%;top:80.8%;">
+          <span class="line"></span><span>&#9664; VARIATION &#9654;</span><span class="line"></span>
+        </div>
+        <div class="silk-group-bar" style="left:32.2%;width:9.2%;top:80.8%;">
+          <span class="line"></span><span>&#9664; ENDING &#9654;</span><span class="line"></span>
+        </div>
+        <div class="silk-group-bar" style="left:42.5%;width:6.1%;top:80.8%;">
+          <span>&#9664; SYNCHRO &#9654;</span>
+        </div>
+        <div class="silk-group-bar" style="left:70.0%;width:27.6%;top:80.8%;">
+          <span class="line"></span><span>&#9664; KEYBOARD SET LIBRARY / SET LIST &#9654;</span><span class="line"></span>
+        </div>
+        <div class="silk-setlist-bracket"></div>
+
+        <!-- Brightness Silkscreen Link between MENU & VALUE dial -->
+        <div class="silk-brightness-link"></div>
+        <div class="silk-brightness-icon">&#9728;</div>
+
+        <!-- 7" Color TouchView Screen -->
+        <div id="touchviewScreen" class="touchview-screen"></div>
+
+        <!-- Dynamic Knobs, VALUE Dial & 74 Hardware Buttons Mounted by app.js -->
+        <div id="faceplateControlsLayer"></div>
+      </div>
+
+      <!-- Right Speaker Grille Wing (shown in Full Cabinet View) -->
+      <div class="speaker-wing right"></div>
+    </main>
+
+    <!-- Compact Live Audio Engine & Stereo VU Meter Strip -->
+    <section class="audio-hud-bar">
+      <div class="audio-hud-left">
+        <button id="btnAudioToggle" class="tb-btn active" title="Toggle Web Audio Synthesizer &amp; Arranger Sound">Sound: ON</button>
+        <div class="vu-meter-wrap" title="Master Audio Output Level">
+          <span class="vu-lbl">OUT</span>
+          <div id="vuMeterSegments" class="vu-segments">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="audio-hud-pills">
+        <span id="hudPillVoice" class="hud-pill voice">Concert Grand</span>
+        <span id="hudPillStyle" class="hud-pill style">Brush Ballad • 73 BPM</span>
+        <span id="hudPillChord" class="hud-pill chord">Chord: ---</span>
+        <span id="hudPillSplit" class="hud-pill split">Split: C4</span>
+      </div>
+
+      <div class="audio-hud-right">
+        <button id="btnToggleLog" class="tb-btn" style="padding:3px 8px;font-size:11px;">Action Log</button>
+      </div>
+    </section>
+
+    <!-- Optional Collapsible Action Log (Hidden by Default) -->
+    <section id="logDrawer" class="event-log-card" style="display:none;">
+      <div class="event-log-header">
+        <span>Panel &amp; Performance Action Log</span>
+        <button id="btnClearLog" class="tb-btn" style="padding:1px 7px;font-size:10.5px;">Clear</button>
+      </div>
+      <div id="eventLogList" class="event-log-list"></div>
+    </section>
+
+    <!-- 61-Key (C2 - C7) Mouse Triad Keyboard + Left Cheek Controllers -->
+    <section class="keyboard-section">
+      <div class="kbd-helper-bar">
+        <div class="kbd-pill-group">
+          <span class="kbd-pill-label">Mouse Key Click Chord:</span>
+          <button class="kbd-pill active" data-chord-mode="major">Major Triad (1-3-5)</button>
+          <button class="kbd-pill" data-chord-mode="minor">Minor Triad (1-b3-5)</button>
+          <button class="kbd-pill" data-chord-mode="dom7">7th Chord (1-3-5-b7)</button>
+          <button class="kbd-pill" data-chord-mode="single">Single Note</button>
+          <span style="margin:0 6px;color:#4b5563;">|</span>
+          <button id="btnLatchKeys" class="kbd-pill" title="Keep clicked chord held down hands-free so you can test MEMORY OFF and SYNCHRO STOP">Hold / Latch Keys: OFF</button>
+          <button id="btnReleaseKeys" class="kbd-pill" title="Lift all latched keys">Lift Hands (Release Keys)</button>
+        </div>
+
+        <div class="kbd-pill-group">
+          <span class="kbd-pill-label">2-Finger / Hold Shortcuts:</span>
+          <button id="btnQuickSplitDialog" class="kbd-pill" title="Same as holding SPLIT button for 1 second">Hold SPLIT (Set Split Point)</button>
+          <button id="btnResetTempo" class="kbd-pill" title="Same as pressing TEMPO - and + together">Tempo -/+ (Original)</button>
+          <button id="btnResetOctave" class="kbd-pill" title="Same as pressing UPPER OCTAVE - and + together">Octave -/+ (0)</button>
+          <button id="btnResetTranspose" class="kbd-pill" title="Same as pressing TRANSPOSE b and # together">Transpose b/# (0)</button>
+        </div>
+      </div>
+
+      <div class="kbd-deck">
+        <!-- Left Cheek Controllers: Oriental Sub-Scale + Joystick + Assignable Switches 1-3 -->
+        <div class="left-cheek-dock">
+          <div class="dock-oriental-wrap">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+              <span style="font-size:10px;font-weight:800;color:#e5e7eb;letter-spacing:0.05em;">ORIENTAL QUARTER-TONE SUB SCALE</span>
+              <span id="subScaleSummary" style="font-size:9.5px;color:#fca5a5;font-weight:700;">Equal</span>
+            </div>
+            <div id="dockOrientalContainer"></div>
+          </div>
+
+          <div class="cheek-controllers-row">
+            <div>
+              <div style="font-size:9px;color:#9ca3af;font-weight:700;margin-bottom:3px;">ASSIGNABLE SW.</div>
+              <div class="assignable-switches">
+                <button class="asw-btn" data-asw="1"><span class="asw-dot"></span><span>SW 1</span></button>
+                <button class="asw-btn" data-asw="2"><span class="asw-dot"></span><span>SW 2</span></button>
+                <button class="asw-btn" data-asw="3"><span class="asw-dot"></span><span>SW 3</span></button>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;">
+              <div style="font-size:9px;color:#9ca3af;font-weight:700;margin-bottom:2px;">JOYSTICK</div>
+              <div id="joystickPad" class="joystick-pad" title="Drag for Pitch Bend (X) &amp; Modulation/DNC (Y)">
+                <div id="joystickStick" class="joystick-stick"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 61-Key Velocity Keyboard (C2 = MIDI 36 to C7 = MIDI 96) -->
+        <div class="piano-bed-wrap">
+          <div id="splitZoneBar" class="split-zone-bar">
+            <div id="zoneLowerLabel" class="zone-lower" style="width:39%;">LOWER / CHORD RECOGNITION (&lt; C4)</div>
+            <div id="zoneUpperLabel" class="zone-upper">UPPER 1-3 MELODY VOICES (&ge; C4)</div>
+          </div>
+          <div id="pianoKeys" class="piano-keys"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="pa700_data.js"></script>
+  <script src="pa700_audio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
