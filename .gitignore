@@ -1,0 +1,14 @@
+# Ignore large downloaded SoundFont binaries (use CDN / IndexedDB / local scripts/download_soundfonts.py)
+soundfonts/*.sf2
+soundfonts/*.sf3
+soundfonts/*.7z
+soundfonts/*.tar.xz
+soundfonts/*.tar.gz
+soundfonts/*.zip
+soundfonts/freepats/
+soundfonts/fluidr3/
+soundfonts/generaluser/
+soundfonts/musescore/
+.DS_Store
+__pycache__/
+*.pyc

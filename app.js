@@ -16,18 +16,95 @@
     return JSON.parse(JSON.stringify(obj));
   }
 
+  function findStyleIndexById(id) {
+    if (!id || !DATA.styles) return 0;
+    const idx = DATA.styles.findIndex(s => s.id === id);
+    return idx >= 0 ? idx : 0;
+  }
+
+  function getMySettingTracks() {
+    const ms = DATA.mySetting || {};
+    const src = ms.tracks || ms.kbdSet || {};
+    const defTrack = (key, fallbackName, vol, isLow) => {
+      const t = src[key] || { sound: fallbackName, muted: false, octave: 0 };
+      return {
+        sound: t.sound || fallbackName,
+        muted: Boolean(t.muted),
+        octave: t.octave || 0,
+        volume: t.volume !== undefined ? t.volume : vol,
+        ...(isLow ? { backing: true } : {})
+      };
+    };
+    return {
+      up1: defTrack("up1", "Concert Grand", 115, false),
+      up2: defTrack("up2", "Real Strings 1", 88, false),
+      up3: defTrack("up3", "Warm Pad GM", 72, false),
+      low: defTrack("low", "Warm Strings", 84, true)
+    };
+  }
+
+  function songDisplayTitle(songObj) {
+    if (!songObj) return "---";
+    return songObj.title || songObj.name || songObj.id || "---";
+  }
+
+  function resolveSoundRecord(soundName) {
+    if (window.pa700Audio && typeof window.pa700Audio.resolveSoundRecord === "function") {
+      return window.pa700Audio.resolveSoundRecord(soundName);
+    }
+    const low = String(soundName || "").toLowerCase();
+    return (DATA.sounds || []).find(s => s.name.toLowerCase() === low) || null;
+  }
+
+  function getSoundBankItems(typeName, groupName) {
+    const groups = (DATA.soundGroupsByType && DATA.soundGroupsByType[typeName]) || {};
+    const ids = groups[groupName] || [];
+    if (!window._pa700SoundById) {
+      window._pa700SoundById = new Map((DATA.sounds || []).map(s => [s.id, s]));
+    }
+    return ids.map(id => window._pa700SoundById.get(id)).filter(Boolean);
+  }
+
+  function getPadBankItems(groupName) {
+    const grp = (DATA.padGroups || []).find(g => g.name === groupName);
+    if (!grp) return [];
+    if (!window._pa700PadById) {
+      window._pa700PadById = new Map((DATA.pads || []).map(p => [p.id, p]));
+    }
+    return grp.padIds.map(id => window._pa700PadById.get(id)).filter(Boolean);
+  }
+
   // =========================================================================
   // INSTRUMENT STATE (Matches Pa700 OS v1.5 Startup State)
   // =========================================================================
   const state = {
     powerOn: true,
     mode: "style", // 'style' | 'song' | 'seq' | 'sound'
-    overlayWindow: null, // null | 'style_select' | 'kbd_lib_select' | 'sound_select' | 'songbook' | 'global' | 'media' | 'menu' | 'lyrics' | 'marker' | 'score' | 'search' | 'metronome' | 'demo'
+    overlayWindow: null, // null | 'style_select' | 'kbd_lib_select' | 'sound_select' | 'pad_select' | 'songbook' | 'global' | 'media' | 'menu' | 'lyrics' | 'marker' | 'score' | 'search' | 'metronome' | 'demo'
     splitDialogOpen: false,
     mainBottomTab: "kbd_set", // 'kbd_set' | 'volume' | 'pad' | 'split' | 'sub_scale' | 'kaoss' | 'mic'
     volumeTrackView: "grouped", // 'grouped' | 'style_tracks' (toggled by TRACK SELECT)
+    styleTrackMutes: [false, false, false, false, false, false, false, false], // Drum, Perc, Bass, Acc1..Acc5
     focusedParam: "tempo", // 'tempo' | 'split' | 'style' | 'kbdset' | 'sound'
     selectedTrackKey: "up1", // 'up1' | 'up2' | 'up3' | 'low'
+
+    // TouchView Browser State (379 Styles, 298 Kbd Sets, 1,845 Sounds, 415 Pads)
+    styleBrowseCat: "Ballad",
+    styleBrowsePage: 0,
+    kbdBrowseCat: "piano",
+    kbdBrowsePage: 0,
+    soundBrowseType: "Factory",
+    soundBrowseGroup: "Piano",
+    soundBrowsePage: 0,
+    padBrowseBank: "HIT",
+    padBrowseGroup: "HIT - Drum",
+    padBrowsePage: 0,
+    padSelectSlot: 0,
+    customStylePads: {},
+    displayHold: true,
+    searchQuery: "",
+    searchScope: "all",
+    audioSfStatus: null,
 
     // Shift & Modifiers
     shiftLatched: false,
@@ -45,7 +122,7 @@
     joystick: { x: 0, y: 0 },
 
     // Style & Arranger State
-    currentStyleIdx: 0, // Brush Ballad (default in manual p. 23!)
+    currentStyleIdx: findStyleIndexById("brush_ballad"), // Brush Ballad (default in manual p. 23)
     tempo: 73,
     tempoLock: false,
     metronomeOn: false,
@@ -91,13 +168,13 @@
     upperOctave: 0, // -2..+2
     masterTranspose: 0, // -12..+12
 
-    kbdSetName: "My Setting",
+    kbdSetName: (DATA.mySetting && DATA.mySetting.kbdSet && DATA.mySetting.kbdSet.name) || "My Setting",
     kbdSetSource: "Kbd Set Library",
-    activeLibCategory: "piano_ep",
+    activeLibCategory: "piano",
     activeLibIndex: 0,
     setListMode: false, // SET LIST button LED: false = Kbd Set Library, true = SongBook Set List 1-9
     activeSetListSlot: 1,
-    tracks: clone(DATA.mySetting.tracks),
+    tracks: getMySettingTracks(),
 
     // Oriental Quarter-Tone Sub-Scale (pitch classes 0..11 lowered by -50 cents)
     subScaleNotes: [], // array of 0..11 pitch classes with -50c
@@ -131,6 +208,60 @@
   function getCurrentStyle() {
     return DATA.styles[state.currentStyleIdx] || DATA.styles[0];
   }
+
+  function getStylePads(st) {
+    const s = st || getCurrentStyle();
+    return state.customStylePads[s.id] || s.pads;
+  }
+
+  function buildAudioState() {
+    return {
+      ...state,
+      splitEnabled: state.splitOn,
+      splitPoint: getEffectiveSplit(),
+      masterVol: Math.round((state.knobs.master_volume !== undefined ? state.knobs.master_volume : 0.82) * 100),
+      balance: Math.round((state.knobs.balance !== undefined ? state.knobs.balance : 0.50) * 100),
+      variation: state.activeVariation,
+      currentStyleObj: getCurrentStyle()
+    };
+  }
+
+  function syncBrowserToStyle(idx) {
+    const st = DATA.styles[idx] || getCurrentStyle();
+    state.styleBrowseCat = st.category;
+    const ids = (DATA.styleIdsByCategory && DATA.styleIdsByCategory[st.category]) || [];
+    const pos = ids.indexOf(st.id);
+    state.styleBrowsePage = pos >= 0 ? Math.floor(pos / 8) : 0;
+  }
+
+  function syncBrowserToKbdSet(catId, idx) {
+    state.kbdBrowseCat = catId || state.activeLibCategory || "piano";
+    state.kbdBrowsePage = idx >= 0 ? Math.floor(idx / 8) : 0;
+  }
+
+  function syncBrowserToSound(soundName) {
+    const rec = resolveSoundRecord(soundName);
+    if (!rec) return;
+    state.soundBrowseType = rec.type || "Factory";
+    state.soundBrowseGroup = rec.group || "Piano";
+    const list = getSoundBankItems(state.soundBrowseType, state.soundBrowseGroup);
+    const pos = list.findIndex(s => s.id === rec.id || s.name === rec.name);
+    state.soundBrowsePage = pos >= 0 ? Math.floor(pos / 8) : 0;
+  }
+
+  function syncBrowserToPad(padObj) {
+    if (!padObj || !padObj.group) return;
+    const grp = (DATA.padGroups || []).find(g => g.name === padObj.group);
+    if (!grp) return;
+    state.padBrowseBank = grp.bankType;
+    state.padBrowseGroup = grp.name;
+    const items = getPadBankItems(grp.name);
+    const pos = items.findIndex(p => p.id === padObj.id || p.name === padObj.name);
+    state.padBrowsePage = pos >= 0 ? Math.floor(pos / 8) : 0;
+  }
+
+  syncBrowserToStyle(state.currentStyleIdx);
+  syncBrowserToSound(state.tracks.up1.sound);
 
   // =========================================================================
   // LOGGING & LIVE READOUT UPDATER
@@ -409,7 +540,7 @@
       if (!dragging) return;
       const delta = (startY - e.clientY) / 130;
       state.knobs[knobId] = Math.max(0, Math.min(1, startVal + delta));
-      if (window.pa700Audio) window.pa700Audio.syncPanelControls(state);
+      if (window.pa700Audio) window.pa700Audio.syncPanelControls(buildAudioState());
       updateKnobVisuals();
       updateReadouts();
     });
@@ -426,7 +557,7 @@
       e.preventDefault();
       const step = e.deltaY < 0 ? 0.05 : -0.05;
       state.knobs[knobId] = Math.max(0, Math.min(1, state.knobs[knobId] + step));
-      if (window.pa700Audio) window.pa700Audio.syncPanelControls(state);
+      if (window.pa700Audio) window.pa700Audio.syncPanelControls(buildAudioState());
       updateKnobVisuals();
       updateReadouts();
     }, { passive: false });
@@ -442,6 +573,28 @@
     });
   }
 
+  function assignSoundToSelectedTrack(soundName, sourceLabel) {
+    const tk = state.selectedTrackKey || "up1";
+    state.tracks[tk].sound = soundName;
+    state.tracks[tk].muted = false;
+    syncBrowserToSound(soundName);
+    if (window.pa700Audio && typeof window.pa700Audio.preloadSound === "function") {
+      window.pa700Audio.preloadSound(soundName);
+    }
+    const rec = resolveSoundRecord(soundName);
+    const dncTag = rec && rec.dnc ? " [DNC Control Active]" : "";
+    logAction(`${sourceLabel || "Sound"} -> ${tk.toUpperCase()} set to "${soundName}"${dncTag}`);
+  }
+
+  function assignPadToSlot(padObj, slotIdx, sourceLabel) {
+    const st = getCurrentStyle();
+    const currentPads = getStylePads(st).slice();
+    currentPads[slotIdx] = padObj;
+    state.customStylePads[st.id] = currentPads;
+    syncBrowserToPad(padObj);
+    logAction(`${sourceLabel || "Pad"} -> PAD ${slotIdx + 1} set to "${padObj.name}" (${padObj.type}).`);
+  }
+
   function stepValueDial(dir) {
     if (!state.powerOn) return;
     state.dialAngle += dir * 18;
@@ -455,7 +608,32 @@
 
     if (state.overlayWindow === "style_select") {
       const next = (state.currentStyleIdx + dir + DATA.styles.length) % DATA.styles.length;
-      selectStyleByIndex(next);
+      selectStyleByIndex(next, { keepOverlayOpen: true });
+      return;
+    }
+
+    if (state.overlayWindow === "kbd_lib_select") {
+      const list = DATA.keyboardSetLibrary[state.kbdBrowseCat || state.activeLibCategory] || [];
+      if (list.length) {
+        const curName = state.kbdSetName;
+        let idx = list.findIndex(k => k.name === curName);
+        idx = idx < 0 ? 0 : (idx + dir + list.length) % list.length;
+        applyLibraryKbdSet(state.kbdBrowseCat || state.activeLibCategory, idx);
+        renderAll();
+      }
+      return;
+    }
+
+    if (state.overlayWindow === "pad_select") {
+      const list = getPadBankItems(state.padBrowseGroup);
+      if (list.length) {
+        const curPads = getStylePads();
+        const curPad = curPads[state.padSelectSlot];
+        let idx = curPad ? list.findIndex(p => p.id === curPad.id || p.name === curPad.name) : -1;
+        idx = idx < 0 ? 0 : (idx + dir + list.length) % list.length;
+        assignPadToSlot(list[idx], state.padSelectSlot, "VALUE Dial");
+        renderAll();
+      }
       return;
     }
 
@@ -465,13 +643,19 @@
       return;
     }
 
-    if (state.focusedParam === "sound") {
-      const trk = state.tracks[state.selectedTrackKey];
-      const curIdx = Math.max(0, DATA.soundsCatalog.indexOf(trk.sound));
-      const nextIdx = (curIdx + dir + DATA.soundsCatalog.length) % DATA.soundsCatalog.length;
-      trk.sound = DATA.soundsCatalog[nextIdx];
-      logAction(`VALUE Dial -> ${state.selectedTrackKey.toUpperCase()} voice changed to "${trk.sound}"`);
-      renderAll();
+    if (state.overlayWindow === "sound_select" || state.focusedParam === "sound") {
+      const bankList = state.overlayWindow === "sound_select"
+        ? getSoundBankItems(state.soundBrowseType, state.soundBrowseGroup)
+        : (DATA.sounds || []);
+      const list = bankList.length ? bankList : (DATA.sounds || []);
+      const curName = state.tracks[state.selectedTrackKey].sound;
+      let curIdx = list.findIndex(s => s.name === curName);
+      curIdx = curIdx < 0 ? 0 : (curIdx + dir + list.length) % list.length;
+      const nextSound = list[curIdx];
+      if (nextSound) {
+        assignSoundToSelectedTrack(nextSound.name, "VALUE Dial");
+        renderAll();
+      }
       return;
     }
 
@@ -580,6 +764,7 @@
       openSplitPointDialog();
     } else if (id === "my_setting") {
       DATA.mySetting.tracks = clone(state.tracks);
+      DATA.mySetting.kbdSet = { name: state.kbdSetName, ...clone(state.tracks) };
       DATA.mySetting.localSplit = state.localSplitPoint;
       logAction("Long-pressed MY SETTING -> Saved current voices & split into 'My Setting'!");
       renderAll();
@@ -661,7 +846,8 @@
         state.mode = "sound";
         state.overlayWindow = "sound_select";
         state.focusedParam = "sound";
-        logAction(`Switched to SOUND mode — Editing/Browsing single Sound "${state.tracks[state.selectedTrackKey].sound}".`);
+        syncBrowserToSound(state.tracks[state.selectedTrackKey].sound);
+        logAction(`Switched to SOUND mode — Browsing ${DATA.sounds.length} manual Sounds (current: "${state.tracks[state.selectedTrackKey].sound}").`);
         break;
       case "global":
         state.overlayWindow = state.overlayWindow === "global" ? null : "global";
@@ -703,11 +889,11 @@
       // Player Controls
       case "player_select":
         state.currentSongIdx = (state.currentSongIdx + 1) % DATA.playerSongs.length;
-        logAction(`PLAYER SELECT -> Loaded "${DATA.playerSongs[state.currentSongIdx].name}".`);
+        logAction(`PLAYER SELECT -> Loaded "${songDisplayTitle(DATA.playerSongs[state.currentSongIdx])}".`);
         break;
       case "player_home":
         state.playerBar = 1;
-        logAction(`PLAYER |◄ (HOME) -> Returned "${DATA.playerSongs[state.currentSongIdx].name}" to Measure 001.`);
+        logAction(`PLAYER |◄ (HOME) -> Returned "${songDisplayTitle(DATA.playerSongs[state.currentSongIdx])}" to Measure 001.`);
         break;
       case "player_rew":
         state.playerBar = Math.max(1, state.playerBar - 2);
@@ -721,7 +907,7 @@
         state.playerRunning = !state.playerRunning;
         if (state.playerRunning) state.padsActive = [false, false, false, false];
         logAction(state.playerRunning
-          ? `PLAYER ►/■ -> Playing Song "${DATA.playerSongs[state.currentSongIdx].name}".`
+          ? `PLAYER ►/■ -> Playing Song "${songDisplayTitle(DATA.playerSongs[state.currentSongIdx])}".`
           : `PLAYER ►/■ -> Stopped Song Player.`);
         break;
 
@@ -761,16 +947,23 @@
           : "MANUAL BASS OFF -> NormalLower sound restored.");
         break;
 
-      // Pads 1-4 + Stop
+      // Pads 1-4 + Stop (Double-click opens Pad Select across all 415 Pads!)
       case "pad_1":
       case "pad_2":
       case "pad_3":
       case "pad_4": {
         const pIdx = parseInt(id.split("_")[1], 10) - 1;
-        const padInfo = getCurrentStyle().pads[pIdx];
+        const padInfo = getStylePads()[pIdx];
+        if (isDouble) {
+          state.padSelectSlot = pIdx;
+          state.overlayWindow = "pad_select";
+          syncBrowserToPad(padInfo);
+          logAction(`Double-clicked PAD ${pIdx + 1} -> Opened Pad Select (${DATA.pads.length} manual Pads) to assign Slot ${pIdx + 1}.`);
+          break;
+        }
         if (padInfo.type === "OneShot") {
           state.padsActive[pIdx] = true;
-          if (window.pa700Audio) window.pa700Audio.triggerPadHit(pIdx, padInfo, state);
+          if (window.pa700Audio) window.pa700Audio.triggerPadHit(pIdx, padInfo, buildAudioState());
           logAction(`Triggered PAD ${pIdx + 1}: "${padInfo.name}" (One-Shot hit)!`);
           setTimeout(() => {
             state.padsActive[pIdx] = false;
@@ -779,7 +972,7 @@
         } else {
           state.padsActive[pIdx] = !state.padsActive[pIdx];
           if (state.padsActive[pIdx] && window.pa700Audio) {
-            window.pa700Audio.triggerPadHit(pIdx, padInfo, state);
+            window.pa700Audio.triggerPadHit(pIdx, padInfo, buildAudioState());
           }
           logAction(state.padsActive[pIdx]
             ? `Started Looping PAD ${pIdx + 1}: "${padInfo.name}" (synced to ${state.tempo} BPM & chord ${state.recognizedChord || "N/A"}).`
@@ -811,7 +1004,8 @@
         state.mode = "style";
         state.overlayWindow = state.overlayWindow === "style_select" ? null : "style_select";
         state.focusedParam = "style";
-        logAction("Pressed STYLE SELECT -> Choose a Style on the TouchView display (or turn VALUE dial).");
+        if (state.overlayWindow === "style_select") syncBrowserToStyle(state.currentStyleIdx);
+        logAction(`Pressed STYLE SELECT -> Choose from ${DATA.styles.length} manual Styles on TouchView (or turn VALUE dial).`);
         break;
       case "mp3_rec":
         state.mp3Recording = !state.mp3Recording;
@@ -1010,27 +1204,33 @@
   // VOICE & KEYBOARD SET FUNCTIONS
   // =========================================================================
   function recallMySetting() {
-    state.tracks = clone(DATA.mySetting.tracks);
-    state.kbdSetName = "My Setting";
+    state.tracks = getMySettingTracks();
+    state.kbdSetName = (DATA.mySetting && DATA.mySetting.kbdSet && DATA.mySetting.kbdSet.name) || "My Setting";
     state.kbdSetSource = "Kbd Set Library";
     state.activeStyleKbdSlot = null;
-    state.splitOn = DATA.mySetting.splitOn;
-    state.localSplitPoint = DATA.mySetting.localSplit;
+    state.splitOn = (DATA.mySetting && DATA.mySetting.splitOn !== undefined) ? DATA.mySetting.splitOn : true;
+    state.localSplitPoint = (DATA.mySetting && DATA.mySetting.localSplit !== undefined) ? DATA.mySetting.localSplit : null;
     state.useGlobalSplit = state.localSplitPoint === null;
+    if (window.pa700Audio && typeof window.pa700Audio.preloadSound === "function") {
+      window.pa700Audio.preloadSound(state.tracks.up1.sound);
+    }
     logAction(`Recalled MY SETTING -> Upper 1: "${state.tracks.up1.sound}", Split ${state.splitOn ? "ON (" + midiToName(getEffectiveSplit()) + ")" : "OFF"}.`);
   }
 
   function recallStyleKeyboardSet(slot, triggerLabel) {
     const st = getCurrentStyle();
-    const ks = st.kbdSets[slot];
+    const ks = st.kbdSets && st.kbdSets[slot];
     if (!ks) return;
     state.activeStyleKbdSlot = slot;
     state.kbdSetName = ks.name;
     state.kbdSetSource = `Style: ${st.name} [#${slot + 1}]`;
     state.tracks.up1 = { sound: ks.up1, muted: false, octave: 0, volume: 100 };
-    state.tracks.up2 = { sound: ks.up2, muted: ks.up2Muted, octave: 0, volume: 82 };
-    state.tracks.up3 = { sound: ks.up3, muted: ks.up3Muted, octave: 0, volume: 80 };
+    state.tracks.up2 = { sound: ks.up2, muted: Boolean(ks.up2Muted), octave: 0, volume: 82 };
+    state.tracks.up3 = { sound: ks.up3, muted: Boolean(ks.up3Muted), octave: 0, volume: 80 };
     state.tracks.low = { sound: ks.low, muted: false, octave: 1, volume: 75, backing: true };
+    if (window.pa700Audio && typeof window.pa700Audio.preloadSound === "function") {
+      window.pa700Audio.preloadSound(ks.up1);
+    }
     logAction(`${triggerLabel} -> Loaded Voice Set #${slot + 1} "${ks.name}" (UP1: ${ks.up1}${!ks.up2Muted ? " + UP2: " + ks.up2 : ""}).`);
   }
 
@@ -1040,18 +1240,21 @@
       const entry = DATA.setListEntries[num - 1];
       if (!entry) return;
       state.activeSetListSlot = num;
-      const sIdx = DATA.styles.findIndex(s => s.id === entry.styleId);
-      if (sIdx >= 0) state.currentStyleIdx = sIdx;
-      if (!state.tempoLock) state.tempo = entry.tempo;
-      state.activeVariation = entry.variation;
-      recallStyleKeyboardSet(entry.kbdIdx, `SET LIST #${num} "${entry.title}"`);
-      logAction(`SET LIST #${num} -> Loaded SongBook Entry "${entry.title}" (Style "${getCurrentStyle().name}", ${state.tempo} BPM, Variation ${entry.variation}).`);
+      state.currentStyleIdx = findStyleIndexById(entry.styleId);
+      syncBrowserToStyle(state.currentStyleIdx);
+      if (!state.tempoLock && entry.tempo) state.tempo = entry.tempo;
+      state.activeVariation = entry.variation || 1;
+      const kbdIdx = entry.kbdIdx !== undefined ? entry.kbdIdx : (entry.kbdSetIndex || 0);
+      recallStyleKeyboardSet(kbdIdx, `SET LIST #${num} "${entry.title}"`);
+      logAction(`SET LIST #${num} -> Loaded SongBook Entry "${entry.title}" (Style "${getCurrentStyle().name}", ${state.tempo} BPM, Variation ${state.activeVariation}).`);
       return;
     }
 
     // Standard KEYBOARD SET LIBRARY Category Selection (1..9)
     const cat = DATA.libraryCategories[num - 1];
+    if (!cat) return;
     const list = DATA.keyboardSetLibrary[cat.id] || [];
+    if (!list.length) return;
     if (state.activeLibCategory === cat.id && state.overlayWindow === "kbd_lib_select") {
       state.activeLibIndex = (state.activeLibIndex + 1) % list.length;
     } else {
@@ -1067,23 +1270,34 @@
     const item = list[idx];
     if (!item) return;
     const catObj = DATA.libraryCategories.find(c => c.id === catId);
+    const catLabel = catObj ? (catObj.label || catObj.short || catId) : catId;
     state.activeLibCategory = catId;
     state.activeLibIndex = idx;
+    syncBrowserToKbdSet(catId, idx);
     state.activeStyleKbdSlot = null;
     state.kbdSetName = item.name;
-    state.kbdSetSource = `Library: ${catObj ? catObj.short : catId}`;
+    state.kbdSetSource = `Library: ${catLabel}`;
     state.tracks.up1 = { ...item.up1, volume: 100 };
     state.tracks.up2 = { ...item.up2, volume: 85 };
     state.tracks.up3 = { ...item.up3, volume: 80 };
     state.tracks.low = { ...item.low, volume: 75, backing: true };
-    logAction(`Keyboard Set Library [${catObj ? catObj.label : catId}] -> Selected "${item.name}" (Upper 1: ${item.up1.sound}${!item.up2.muted ? " + Upper 2: " + item.up2.sound : ""}).`);
+    if (window.pa700Audio && typeof window.pa700Audio.preloadSound === "function") {
+      window.pa700Audio.preloadSound(item.up1.sound);
+    }
+    logAction(`Keyboard Set Library [${catLabel} #${idx + 1}/${list.length}] -> Selected "${item.name}" (Upper 1: ${item.up1.sound}${!item.up2.muted ? " + Upper 2: " + item.up2.sound : ""}).`);
   }
 
-  function selectStyleByIndex(idx) {
+  function selectStyleByIndex(idx, options = {}) {
     state.currentStyleIdx = idx;
+    syncBrowserToStyle(idx);
     const st = getCurrentStyle();
     if (!state.tempoLock) {
       state.tempo = st.tempo;
+    }
+    state.currentBeat = 1;
+    state.currentBar = 1;
+    if (window.pa700Audio && state.arrangerRunning) {
+      window.pa700Audio.resetGroovePosition();
     }
     state.padsActive = [false, false, false, false];
     if (state.styleToKbdMode === "on") {
@@ -1091,7 +1305,13 @@
     } else if (state.styleToKbdMode === "blink") {
       recallStyleKeyboardSet(state.activeVariation - 1, `Style "${st.name}" (Style to Kbd Set BLINK)`);
     }
-    logAction(`Selected Style "${st.name}" (${st.bank}, Meter ${st.meter}, ${state.tempo} BPM${state.tempoLock ? " [LOCKED]" : ""}).`);
+    if (!options.keepOverlayOpen && !state.displayHold && state.overlayWindow === "style_select") {
+      state.overlayWindow = null;
+    }
+    const bandPreview = Array.isArray(st.styleTracks) && st.styleTracks.length >= 4
+      ? ` — Band: ${st.styleTracks[0].sound}, ${st.styleTracks[2].sound}, ${st.styleTracks[3].sound}, ${st.styleTracks[7].sound}`
+      : "";
+    logAction(`Selected Style "${st.name}" (${st.bank}, Meter ${st.meter}, ${state.tempo} BPM${state.tempoLock ? " [LOCKED]" : ""})${bandPreview}.`);
     renderAll();
   }
 
@@ -1117,6 +1337,7 @@
   function startArranger(reason) {
     if (window.pa700Audio) {
       window.pa700Audio.init();
+      window.pa700Audio.resume();
       window.pa700Audio.resetGroovePosition();
     }
     state.arrangerRunning = true;
@@ -1145,7 +1366,7 @@
     state.padsActive = [false, false, false, false];
     state.currentBeat = 1;
     state.currentBar = 1;
-    if (window.pa700Audio) window.pa700Audio.syncPanelControls(state);
+    if (window.pa700Audio) window.pa700Audio.syncPanelControls(buildAudioState());
   }
 
   function triggerIntro(num, isDouble) {
@@ -1285,7 +1506,7 @@
       clockTimer = null;
     }
     if (window.pa700Audio) {
-      window.pa700Audio.startEngineLoop(() => state, onBeatTick);
+      window.pa700Audio.startEngineLoop(() => buildAudioState(), onBeatTick);
     } else {
       const beatMs = Math.max(120, Math.round(60000 / state.tempo));
       clockTimer = setInterval(onBeatTick, beatMs);
@@ -1409,16 +1630,22 @@
 
   function recallSubScalePreset(scId) {
     if (!state.powerOn) return;
-    const preset = DATA.subScalePresets.find(p => p.id === scId);
+    const preset = (DATA.subScalePresets || []).find(p => p.id === scId) || (DATA.subScalePresets || [])[scId];
     if (!preset) return;
+    const presetNotes = Array.isArray(preset.notes)
+      ? preset.notes
+      : (Array.isArray(preset.offsets)
+          ? preset.offsets.map((off, idx) => (off < 0 ? idx : -1)).filter(i => i >= 0)
+          : []);
+    const label = preset.label || `SC${scId}`;
     if (state.activeSubScalePreset === scId) {
       state.activeSubScalePreset = null;
       state.subScaleNotes = [];
-      logAction(`Cleared Sub-Scale Preset ${preset.label} -> Equal Temperament restored.`);
+      logAction(`Cleared Sub-Scale Preset ${label} -> Equal Temperament restored.`);
     } else {
       state.activeSubScalePreset = scId;
-      state.subScaleNotes = [...preset.notes];
-      logAction(`Recalled Sub-Scale ${preset.label}: ${preset.name}.`);
+      state.subScaleNotes = [...presetNotes];
+      logAction(`Recalled Sub-Scale ${label}: ${preset.name}.`);
     }
     renderAll();
   }
@@ -1561,7 +1788,7 @@
 
     // Play actual synthesized voices across Split / Upper 1-3 / Lower / Sub-Scale!
     if (window.pa700Audio) {
-      window.pa700Audio.playKeyboardNotes(chordNotes, state);
+      window.pa700Audio.playKeyboardNotes(chordNotes, buildAudioState());
     }
 
     const noteNames = chordNotes.map(midiToName).join(", ");
@@ -1574,7 +1801,7 @@
 
   function releaseKeyboardNotes() {
     if (window.pa700Audio) {
-      window.pa700Audio.releaseAllKeyboardVoices();
+      window.pa700Audio.releaseAllKeyboardVoices(buildAudioState());
     }
     if (state.pressedMidiNotes.length === 0) return;
     state.pressedMidiNotes = [];
@@ -1753,7 +1980,7 @@
     } else {
       const activeCatObj = DATA.libraryCategories.find(c => c.id === state.activeLibCategory);
       if (activeCatObj && state.activeStyleKbdSlot === null && state.kbdSetName !== "My Setting") {
-        setLed(`ksl_${activeCatObj.num}`, "red", false);
+        setLed(`ksl_${activeCatObj.buttonNumber || activeCatObj.num}`, "red", false);
       }
     }
 
@@ -1822,6 +2049,7 @@
 
   function updateReadouts() {
     const pVoice = document.getElementById("hudPillVoice");
+    const pDnc = document.getElementById("hudPillDnc");
     const pStyle = document.getElementById("hudPillStyle");
     const pChord = document.getElementById("hudPillChord");
     const pSplit = document.getElementById("hudPillSplit");
@@ -1829,6 +2057,7 @@
 
     if (!state.powerOn) {
       pVoice.textContent = "Standby (Power OFF)";
+      if (pDnc) pDnc.style.display = "none";
       pStyle.textContent = "---";
       pChord.textContent = "---";
       pSplit.textContent = "---";
@@ -1839,6 +2068,26 @@
       .filter(k => !state.tracks[k].muted)
       .map(k => state.tracks[k].sound);
     pVoice.textContent = `${state.kbdSetName}: ${upActive.join(" + ") || "Muted"}`;
+
+    if (pDnc) {
+      const selSound = state.tracks[state.selectedTrackKey] ? state.tracks[state.selectedTrackKey].sound : state.tracks.up1.sound;
+      const rec = resolveSoundRecord(selSound);
+      if (rec && rec.dnc) {
+        const d = rec.dnc;
+        const notes = [];
+        if (d.sc1On) notes.push(`SW1: ${d.sc1On}`);
+        if (d.sc2On) notes.push(`SW2: ${d.sc2On}`);
+        if (d.yPlus) notes.push(`Y+: ${d.yPlus}`);
+        if (d.yMinus) notes.push(`Y-: ${d.yMinus}`);
+        if (d.legatoIn) notes.push(`Legato: ${d.legatoIn}`);
+        if (d.afterTouch) notes.push(`AT: ${d.afterTouch}`);
+        pDnc.style.display = "inline-flex";
+        pDnc.textContent = `DNC: ${rec.name}`;
+        pDnc.title = notes.join(" | ") || `${rec.name} DNC`;
+      } else {
+        pDnc.style.display = "none";
+      }
+    }
 
     const st = getCurrentStyle();
     let secTag = `Var ${state.activeVariation}`;
@@ -2006,7 +2255,7 @@
           <div class="tv-res-box song-box" data-tv-action="cycle_song">
             <div class="tv-vert-tag">P<br/>L<br/>Y</div>
             <div class="tv-res-content" style="justify-content:center;">
-              <div class="tv-song-name">${escapeHtml(songObj.name)}</div>
+              <div class="tv-song-name">${escapeHtml(songDisplayTitle(songObj))}</div>
               <div class="tv-meta-row"><span>${state.playerRunning ? "Playing" : "Stopped"} • Bar ${String(state.playerBar).padStart(3, "0")}</span></div>
             </div>
           </div>
@@ -2056,9 +2305,12 @@
     }
 
     if (state.mainBottomTab === "pad") {
-      return st.pads.map((p, idx) => `
-        <div class="tv-kbdset-slot ${state.padsActive[idx] ? "active" : ""}" data-tv-pad="${idx}">
-          <span class="slot-num">PAD ${idx + 1} (${p.type})</span>
+      return getStylePads(st).map((p, idx) => `
+        <div class="tv-kbdset-slot ${state.padsActive[idx] ? "active" : ""}" data-tv-pad="${idx}" title="Click to trigger PAD ${idx + 1}; double-click or click Pick to choose from 415 Pads">
+          <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+            <span class="slot-num">PAD ${idx + 1} (${p.type === "Loop" ? "SEQ" : "HIT"})</span>
+            <span data-tv-editpad="${idx}" style="font-size:0.46cqi;background:#334155;color:#fde68a;padding:0 3px;border-radius:2px;cursor:pointer;">Pick</span>
+          </div>
           <span class="slot-label">${escapeHtml(p.name)}</span>
         </div>
       `).join("");
@@ -2066,13 +2318,18 @@
 
     if (state.mainBottomTab === "volume") {
       if (state.volumeTrackView === "style_tracks") {
+        const curStyle = getCurrentStyle();
+        const sTracks = curStyle.styleTracks || [];
         const names = ["Drum", "Perc", "Bass", "Acc1", "Acc2", "Acc3", "Acc4", "Acc5"];
         return names.map((nm, idx) => {
-          const muted = idx >= 2 && (!state.accompOn || state.manualBass);
+          const sndName = sTracks[idx] ? sTracks[idx].sound : nm;
+          const shortSnd = sndName.length > 10 ? sndName.slice(0, 9) + "…" : sndName;
+          const muted = Boolean(state.styleTrackMutes[idx]) || (idx >= 2 && (!state.accompOn || state.manualBass));
           return `
-            <div class="tv-kbdset-slot" style="padding:1px;">
+            <div class="tv-kbdset-slot" data-tv-style-mute="${idx}" title="${escapeHtml(nm + ": " + sndName + " (Click to Mute/Play)")}" style="padding:1px;cursor:pointer;">
               <span class="slot-num">${nm}</span>
-              <span style="font-size:0.52cqi;color:${muted ? "#f87171" : "#4ade80"};">${muted ? "MUTE" : "PLAY"}</span>
+              <span style="font-size:0.46cqi;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(shortSnd)}</span>
+              <span style="font-size:0.48cqi;color:${muted ? "#f87171" : "#4ade80"};">${muted ? "MUTE" : "PLAY"}</span>
             </div>
           `;
         }).join("");
@@ -2101,13 +2358,124 @@
     return `<div style="width:100%;text-align:center;font-size:0.60cqi;color:#a7f3d0;">Mic &amp; Voice Processor: 3-Part Vocal Harmony (Follows Chord ${state.recognizedChord || "---"})</div>`;
   }
 
+  function renderSelectWindow(cfg) {
+    const cats = cfg.categories || [];
+    const splitAt = cats.length <= 12 ? Math.min(6, Math.ceil(cats.length / 2)) : Math.ceil(cats.length / 2);
+    const leftCats = cats.slice(0, splitAt);
+    const rightCats = cats.slice(splitAt);
+    const compactStyle = cats.length > 12 ? ` style="font-size:7px;padding:1px 3px;"` : "";
+    const renderCatCol = (colCats) => colCats.map(c =>
+      `<button type="button" class="tv-cat-tab ${c.active ? "active" : ""}"${compactStyle} ${cfg.catAttr}="${escapeHtml(c.id)}" title="${escapeHtml(c.label)} (${c.count})">${escapeHtml(c.label)}</button>`
+    ).join("");
+
+    const totalItems = cfg.items.length;
+    const perPage = 8;
+    const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
+    const page = Math.max(0, Math.min(cfg.page || 0, totalPages - 1));
+    const slice = cfg.items.slice(page * perPage, (page + 1) * perPage);
+    const cardsHtml = [];
+    for (let i = 0; i < perPage; i++) {
+      const it = slice[i];
+      if (!it) {
+        cardsHtml.push(`<div class="tv-slot-card blank"><span class="tv-slot-name">---</span></div>`);
+      } else {
+        const card = cfg.renderItemCard(it, page * perPage + i);
+        cardsHtml.push(`
+          <button type="button" class="tv-slot-card ${card.active ? "active" : ""}" ${card.pickAttr}="${escapeHtml(String(card.pickVal))}" title="${escapeHtml(card.tooltip || card.name)}">
+            <span class="tv-slot-name">${escapeHtml(card.name)}</span>
+            <span class="tv-slot-sub">${escapeHtml(card.sub || "")}</span>
+          </button>
+        `);
+      }
+    }
+
+    const pagePills = [];
+    for (let p = 0; p < totalPages; p++) {
+      pagePills.push(`<button type="button" class="tv-page-pill ${p === page ? "active" : ""}" data-tv-selpage="${p}">P${p + 1}</button>`);
+    }
+
+    return `
+      <div class="tv-window">
+        <div class="tv-select-win">
+          <div class="tv-sel-topbar">
+            <span class="tv-sel-title">${escapeHtml(cfg.title)}</span>
+            <div class="tv-type-tabs">${cfg.topTabsHtml || ""}</div>
+            <div style="display:flex;align-items:center;gap:3px;">
+              <button type="button" class="tv-hold-btn ${state.displayHold ? "active" : ""}" data-tv-hold="1" title="Display Hold: keep browser open after tapping an item">HOLD</button>
+              <button type="button" class="tv-close-btn" data-tv-close="1" title="Close (EXIT)">&#10005;</button>
+            </div>
+          </div>
+          <div class="tv-sel-body">
+            <div class="tv-cat-col">${renderCatCol(leftCats)}</div>
+            <div class="tv-col-grid">${cardsHtml.join("")}</div>
+            <div class="tv-cat-col">${renderCatCol(rightCats)}</div>
+          </div>
+          ${cfg.dncBannerHtml || ""}
+          <div class="tv-bank-footer">
+            <span style="font-size:8px;color:#94a3b8;">${totalItems ? `${page * perPage + 1}-${Math.min(totalItems, (page + 1) * perPage)} / ${totalItems}` : "0 items"}</span>
+            <div class="tv-bank-pills">${pagePills.join("")}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function getSearchMatches(query, scope) {
+    const q = String(query || "").trim().toLowerCase();
+    const out = [];
+    const maxItems = 60;
+    const matchText = (txt) => !q || String(txt || "").toLowerCase().includes(q);
+
+    if (scope === "all" || scope === "style") {
+      DATA.styles.forEach((s, idx) => {
+        if (out.length < maxItems && (matchText(s.name) || matchText(s.category) || matchText(s.bank))) {
+          out.push({ kind: "style", name: s.name, sub: `Style • ${s.category} • ${s.meter} • ${s.tempo} BPM`, val: String(idx) });
+        }
+      });
+    }
+    if (scope === "all" || scope === "kbd") {
+      (DATA.allKbdSets || []).forEach((k) => {
+        if (out.length < maxItems && (matchText(k.name) || matchText(k.category) || matchText(k.up1 && k.up1.sound))) {
+          out.push({ kind: "kbd", name: k.name, sub: `Kbd Set • ${k.category} (${k.up1 ? k.up1.sound : ""})`, val: `${k.categoryId}:${k.pc}` });
+        }
+      });
+    }
+    if (scope === "all" || scope === "sound") {
+      (DATA.sounds || []).forEach((s) => {
+        if (out.length < maxItems && (matchText(s.name) || matchText(s.group) || matchText(s.type))) {
+          out.push({ kind: "sound", name: s.name, sub: `Sound (${s.type}) • ${s.group}${s.dnc ? " • DNC" : ""}`, val: s.name });
+        }
+      });
+    }
+    if (scope === "all" || scope === "pad") {
+      (DATA.pads || []).forEach((p) => {
+        if (out.length < maxItems && (matchText(p.name) || matchText(p.group))) {
+          out.push({ kind: "pad", name: p.name, sub: `Pad (${p.type}) • ${p.group}`, val: p.id });
+        }
+      });
+    }
+    return out;
+  }
+
+  function renderSearchResultCards(matches) {
+    if (!matches.length) {
+      return `<div style="grid-column:1 / -1;padding:12px;text-align:center;color:#94a3b8;font-size:9px;">No matching Styles, Keyboard Sets, Sounds, or Pads.</div>`;
+    }
+    return matches.map((m) => `
+      <button type="button" class="tv-slot-card" data-tv-searchkind="${escapeHtml(m.kind)}" data-tv-searchval="${escapeHtml(m.val)}">
+        <span class="tv-slot-name">${escapeHtml(m.name)}</span>
+        <span class="tv-slot-sub">${escapeHtml(m.sub)}</span>
+      </button>
+    `).join("");
+  }
+
   function renderOverlayWindow(st) {
-    // 1. SongBook Set List 3x3 Grid (exact match to upscaled_full_control_panel.png!)
+    // 1. SongBook Set List 3x3 Grid
     if (state.overlayWindow === "songbook") {
       const tiles = DATA.setListEntries.map(e => `
         <div class="tv-setlist-tile ${state.activeSetListSlot === e.slot ? "active" : ""}" data-tv-setlist="${e.slot}">
           <div class="sl-top">
-            <span style="background:#fff;color:#b91c1c;padding:0 2px;border-radius:1px;">${e.type}</span>
+            <span style="background:#fff;color:#b91c1c;padding:0 2px;border-radius:1px;">${escapeHtml(e.type)}</span>
             <span class="sl-num">${e.slot}</span>
           </div>
           <div class="sl-title">${escapeHtml(e.title)}</div>
@@ -2124,72 +2492,189 @@
       `;
     }
 
-    // 2. Style Select Window
+    // 2. Style Select Window (All 379 Manual Styles across 12 categories + P1..P5 pages)
     if (state.overlayWindow === "style_select") {
-      const cats = DATA.styleCategories.map(c =>
-        `<button type="button" class="tv-cat-btn ${st.category === c ? "active" : ""}" data-tv-stylecat="${c}">${c}</button>`
-      ).join("");
-      const tiles = DATA.styles.map((s, idx) => `
-        <div class="tv-select-tile ${state.currentStyleIdx === idx ? "active" : ""}" data-tv-pickstyle="${idx}">
-          <span>${escapeHtml(s.name)}</span>
-          <span style="font-size:0.50cqi;opacity:0.85;">${s.meter} • ${s.tempo}</span>
-        </div>
-      `).join("");
-      return `
-        <div class="tv-window">
-          <div class="tv-win-cats">${cats}</div>
-          <div class="tv-select-grid">${tiles}</div>
-        </div>
-      `;
+      if (!window._pa700StyleIdxById) {
+        window._pa700StyleIdxById = new Map(DATA.styles.map((s, idx) => [s.id, idx]));
+      }
+      const activeCat = state.styleBrowseCat || st.category;
+      const catIds = (DATA.styleIdsByCategory && DATA.styleIdsByCategory[activeCat]) || [];
+      const catItems = catIds.map(id => {
+        const idx = window._pa700StyleIdxById.get(id);
+        return idx !== undefined ? { style: DATA.styles[idx], idx } : null;
+      }).filter(Boolean);
+      return renderSelectWindow({
+        title: `STYLE SELECT (${DATA.styles.length})`,
+        topTabsHtml: `<button type="button" class="tv-type-tab" data-tv-opensearch="style">Find...</button>`,
+        categories: DATA.styleCategories.map(c => ({
+          id: c,
+          label: c,
+          count: (DATA.styleIdsByCategory[c] || []).length,
+          active: activeCat === c
+        })),
+        catAttr: "data-tv-stylecat",
+        items: catItems,
+        page: state.styleBrowsePage,
+        renderItemCard: ({ style, idx }) => ({
+          name: style.name,
+          sub: `${style.meter} • ${style.tempo} BPM • ${style.bank}`,
+          tooltip: `${style.name} (${style.category}, ${style.meter}, ${style.tempo} BPM, PC ${style.pc})`,
+          active: state.currentStyleIdx === idx,
+          pickAttr: "data-tv-pickstyle",
+          pickVal: idx
+        })
+      });
     }
 
-    // 3. Keyboard Set Library Select Window
+    // 3. Keyboard Set Library Select Window (All 298 Manual Sets across 9 categories)
     if (state.overlayWindow === "kbd_lib_select") {
-      const cats = DATA.libraryCategories.map(c =>
-        `<button type="button" class="tv-cat-btn ${state.activeLibCategory === c.id ? "active" : ""}" data-tv-libcat="${c.id}">${c.short}</button>`
-      ).join("");
-      const items = DATA.keyboardSetLibrary[state.activeLibCategory] || [];
-      const tiles = items.map((it, idx) => `
-        <div class="tv-select-tile ${state.kbdSetName === it.name ? "active" : ""}" data-tv-picklib="${idx}">
-          <span>${escapeHtml(it.name)}</span>
-          <span style="font-size:0.48cqi;opacity:0.85;">${escapeHtml(it.up1.sound)}</span>
-        </div>
-      `).join("");
-      return `
-        <div class="tv-window">
-          <div class="tv-win-cats">${cats}</div>
-          <div class="tv-select-grid">${tiles}</div>
-        </div>
-      `;
+      const activeCat = state.kbdBrowseCat || state.activeLibCategory || "piano";
+      const items = DATA.keyboardSetLibrary[activeCat] || [];
+      return renderSelectWindow({
+        title: `KEYBOARD SET LIBRARY (${DATA.allKbdSets ? DATA.allKbdSets.length : 298})`,
+        topTabsHtml: `<button type="button" class="tv-type-tab" data-tv-opensearch="kbd">Find...</button>`,
+        categories: DATA.libraryCategories.map(c => ({
+          id: c.id,
+          label: `${c.buttonNumber}. ${c.label}`,
+          count: (DATA.keyboardSetLibrary[c.id] || []).length,
+          active: activeCat === c.id
+        })),
+        catAttr: "data-tv-libcat",
+        items,
+        page: state.kbdBrowsePage,
+        renderItemCard: (it, idx) => ({
+          name: it.name,
+          sub: `${it.up1 ? it.up1.sound : ""}${it.up2 && !it.up2.muted ? " + " + it.up2.sound : ""}`,
+          tooltip: `${it.name} — UP1: ${it.up1 ? it.up1.sound : ""}`,
+          active: state.activeStyleKbdSlot === null && state.activeLibCategory === activeCat && state.kbdSetName === it.name,
+          pickAttr: "data-tv-picklib",
+          pickVal: idx
+        })
+      });
     }
 
-    // 4. Sound Select Window (for UP1/UP2/UP3/LOW individual voice or SOUND mode)
+    // 4. Sound Select Window (All 1,845 Manual Sounds + Drum Kits + DNC bar)
     if (state.overlayWindow === "sound_select") {
+      const curType = state.soundBrowseType || "Factory";
+      const groupsMap = (DATA.soundGroupsByType && DATA.soundGroupsByType[curType]) || {};
+      const groupNames = Object.keys(groupsMap);
+      const activeGroup = groupNames.includes(state.soundBrowseGroup) ? state.soundBrowseGroup : (groupNames[0] || "Piano");
+      const items = getSoundBankItems(curType, activeGroup);
       const curSound = state.tracks[state.selectedTrackKey].sound;
-      const tiles = DATA.soundsCatalog.map(snd => `
-        <div class="tv-select-tile ${curSound === snd ? "active" : ""}" data-tv-picksound="${escapeHtml(snd)}">
-          <span>${escapeHtml(snd)}</span>
-        </div>
-      `).join("");
+      const curRec = resolveSoundRecord(curSound);
+      let dncBannerHtml = "";
+      if (curRec && curRec.dnc) {
+        const d = curRec.dnc;
+        const caps = [
+          d.sc1On ? `SW1:${d.sc1On}` : "",
+          d.sc2On ? `SW2:${d.sc2On}` : "",
+          d.yPlus ? `Y+:${d.yPlus}` : "",
+          d.yMinus ? `Y-:${d.yMinus}` : "",
+          d.legatoIn ? `Legato:${d.legatoIn}` : ""
+        ].filter(Boolean).join(" • ");
+        dncBannerHtml = `<div class="tv-dnc-strip">DNC (${escapeHtml(curRec.name)}): ${escapeHtml(caps || "Articulation Active")}</div>`;
+      }
+      const typeTabs = (DATA.soundTypes || ["Factory", "Legacy", "GM/XG"]).map(tp =>
+        `<button type="button" class="tv-type-tab ${curType === tp ? "active" : ""}" data-tv-soundtype="${escapeHtml(tp)}">${escapeHtml(tp)}</button>`
+      ).join("") + `<button type="button" class="tv-type-tab" data-tv-cycletrack="1" title="Switch target track (UP1/UP2/UP3/LOW)">[${state.selectedTrackKey.toUpperCase()}]</button>`;
+
+      return renderSelectWindow({
+        title: `SOUND SELECT (${DATA.sounds.length})`,
+        topTabsHtml: typeTabs,
+        categories: groupNames.map(g => ({
+          id: g,
+          label: g,
+          count: (groupsMap[g] || []).length,
+          active: activeGroup === g
+        })),
+        catAttr: "data-tv-soundgroup",
+        items,
+        page: state.soundBrowsePage,
+        dncBannerHtml,
+        renderItemCard: (snd) => ({
+          name: snd.name,
+          sub: `${snd.isDrum ? "DRUM KIT" : `CC ${snd.cc00}.${snd.cc32}.${snd.pc}`}${snd.dnc ? " • DNC" : ""}`,
+          tooltip: `${snd.name} (${snd.type} • ${snd.group} • CC0:${snd.cc00} CC32:${snd.cc32} PC:${snd.pc})`,
+          active: curSound === snd.name,
+          pickAttr: "data-tv-picksound",
+          pickVal: snd.name
+        })
+      });
+    }
+
+    // 5. Pad Select Window (All 415 Manual Pads across HIT & SEQ groups)
+    if (state.overlayWindow === "pad_select") {
+      const bankType = state.padBrowseBank || "HIT";
+      const bankGroups = (DATA.padGroups || []).filter(g => g.bankType === bankType);
+      const activeGroup = bankGroups.some(g => g.name === state.padBrowseGroup)
+        ? state.padBrowseGroup
+        : (bankGroups[0] ? bankGroups[0].name : "");
+      const items = getPadBankItems(activeGroup);
+      const curSlotPad = getStylePads(st)[state.padSelectSlot];
+      const topTabs = ["HIT", "SEQ"].map(bk =>
+        `<button type="button" class="tv-type-tab ${bankType === bk ? "active" : ""}" data-tv-padbank="${bk}">${bk}</button>`
+      ).join("") + `<button type="button" class="tv-type-tab" data-tv-padslot="1" title="Cycle Target Pad Slot 1..4">Slot ${state.padSelectSlot + 1}</button>`;
+
+      return renderSelectWindow({
+        title: `PAD SELECT (${DATA.pads.length})`,
+        topTabsHtml: topTabs,
+        categories: bankGroups.map(g => ({
+          id: g.name,
+          label: g.name.replace(/^(HIT|SEQ)\s*-\s*/i, ""),
+          count: g.padIds.length,
+          active: activeGroup === g.name
+        })),
+        catAttr: "data-tv-padgroup",
+        items,
+        page: state.padBrowsePage,
+        renderItemCard: (p) => ({
+          name: p.name,
+          sub: `${p.type === "Loop" ? "SEQ Loop" : "HIT Shot"} • #${p.slot}`,
+          tooltip: `${p.name} (${p.group})`,
+          active: Boolean(curSlotPad && curSlotPad.name === p.name),
+          pickAttr: "data-tv-pickpad",
+          pickVal: p.id
+        })
+      });
+    }
+
+    // 6. Real-Time Search Overlay across 379 Styles, 298 Kbd Sets, 1,845 Sounds, 415 Pads
+    if (state.overlayWindow === "search") {
+      const matches = getSearchMatches(state.searchQuery, state.searchScope);
+      const scopes = [
+        { id: "all", lbl: "All" },
+        { id: "style", lbl: "Styles" },
+        { id: "kbd", lbl: "Kbd Sets" },
+        { id: "sound", lbl: "Sounds" },
+        { id: "pad", lbl: "Pads" }
+      ];
       return `
         <div class="tv-window">
-          <div style="background:#18191c;padding:2px 6px;font-size:0.56cqi;color:#5eead4;font-weight:700;">
-            Assigning Sound to Track: <strong>${state.selectedTrackKey.toUpperCase()}</strong> (Press EXIT when done)
+          <div class="tv-search-win">
+            <div class="tv-search-bar">
+              <input id="tvSearchInput" class="tv-search-input" type="text" placeholder="Search 379 Styles, 298 Kbd Sets, 1,845 Sounds, 415 Pads..." value="${escapeHtml(state.searchQuery)}" />
+              <span id="tvSearchCount" style="font-size:8.5px;color:#93c5fd;white-space:nowrap;">${matches.length}${matches.length >= 60 ? "+" : ""} hits</span>
+              <button type="button" class="tv-close-btn" data-tv-close="1">&#10005;</button>
+            </div>
+            <div class="tv-type-tabs">
+              ${scopes.map(sc => `<button type="button" class="tv-type-tab ${state.searchScope === sc.id ? "active" : ""}" data-tv-searchscope="${sc.id}">${sc.lbl}</button>`).join("")}
+            </div>
+            <div id="tvSearchResults" class="tv-search-results">${renderSearchResultCards(matches)}</div>
           </div>
-          <div class="tv-select-grid">${tiles}</div>
         </div>
       `;
     }
 
-    // 5. Lyrics / Score / Marker / Global / Menu / Media / Search Windows
+    // 7. Lyrics / Score / Marker / Global / Menu / Media / Demo Windows
     const song = DATA.playerSongs[state.currentSongIdx];
+    const songTitle = songDisplayTitle(song);
     let infoTitle = state.overlayWindow.toUpperCase();
     let infoBody = "";
     if (state.overlayWindow === "lyrics") {
-      infoTitle = `LYRICS — ${song.name}`;
-      infoBody = `<pre style="margin:4px 0;white-space:pre-wrap;font-family:inherit;color:#fde047;">${escapeHtml(song.lyrics)}</pre>`;
+      infoTitle = `LYRICS — ${songTitle}`;
+      infoBody = `<pre style="margin:4px 0;white-space:pre-wrap;font-family:inherit;color:#fde047;">${escapeHtml((song && song.lyrics) || `Playing ${songTitle} (${(song && song.tempo) || state.tempo} BPM, Length ${(song && song.length) || "03:40"}) — Embedded SMF/MP3 lyric stream ready.`)}</pre>`;
     } else if (state.overlayWindow === "score") {
-      infoTitle = `MUSICAL SCORE — ${song.name}`;
+      infoTitle = `MUSICAL SCORE — ${songTitle}`;
       infoBody = `Treble & Bass Staff Notation Generated from MIDI Tracks (Key: C, Meter: ${st.meter}, Tempo: ${state.tempo} BPM).`;
     } else if (state.overlayWindow === "marker") {
       infoTitle = "SONG MARKERS";
@@ -2227,14 +2712,16 @@
         if (act === "open_style_select") {
           state.overlayWindow = "style_select";
           state.focusedParam = "style";
+          syncBrowserToStyle(state.currentStyleIdx);
         } else if (act === "focus_tempo") {
           state.focusedParam = "tempo";
           logAction("Focused Tempo on TouchView -> Turn the silver VALUE dial or click TEMPO -/+.");
         } else if (act === "cycle_song") {
           state.currentSongIdx = (state.currentSongIdx + 1) % DATA.playerSongs.length;
-          logAction(`Selected Song "${DATA.playerSongs[state.currentSongIdx].name}".`);
+          logAction(`Selected Song "${songDisplayTitle(DATA.playerSongs[state.currentSongIdx])}".`);
         } else if (act === "open_kbd_select") {
           state.overlayWindow = "kbd_lib_select";
+          syncBrowserToKbdSet(state.activeLibCategory, state.activeLibIndex);
         } else if (act === "open_split_dlg") {
           openSplitPointDialog();
         } else if (act === "reset_subscale") {
@@ -2253,7 +2740,8 @@
         if (state.selectedTrackKey === tk) {
           state.overlayWindow = "sound_select";
           state.focusedParam = "sound";
-          logAction(`Tapped ${tk.toUpperCase()} again -> Opened Sound Select window for ${tk.toUpperCase()}.`);
+          syncBrowserToSound(state.tracks[tk].sound);
+          logAction(`Tapped ${tk.toUpperCase()} again -> Opened Sound Select (${DATA.sounds.length} manual Sounds) for ${tk.toUpperCase()}.`);
         } else {
           state.selectedTrackKey = tk;
           state.focusedParam = "sound";
@@ -2270,6 +2758,20 @@
         const tk = el.dataset.tvMute;
         state.tracks[tk].muted = !state.tracks[tk].muted;
         logAction(`${tk.toUpperCase()} ("${state.tracks[tk].sound}") ${state.tracks[tk].muted ? "MUTED" : "UNMUTED (Active Layer)"}.`);
+        renderAll();
+      });
+    });
+
+    // Mute / Play toggle on the 8 Style Accompaniment Tracks (Drum, Perc, Bass, Acc1..Acc5)
+    screen.querySelectorAll("[data-tv-style-mute]").forEach(el => {
+      el.addEventListener("click", e => {
+        e.stopPropagation();
+        const idx = parseInt(el.dataset.tvStyleMute, 10);
+        if (isNaN(idx) || idx < 0 || idx > 7) return;
+        state.styleTrackMutes[idx] = !state.styleTrackMutes[idx];
+        const curStyle = getCurrentStyle();
+        const trkObj = (curStyle.styleTracks && curStyle.styleTracks[idx]) || { label: `Track ${idx + 1}`, sound: "---" };
+        logAction(`Style Track ${trkObj.label} ("${trkObj.sound}") ${state.styleTrackMutes[idx] ? "MUTED" : "UNMUTED"}.`);
         renderAll();
       });
     });
@@ -2292,53 +2794,224 @@
       });
     });
 
-    // Pad tiles
+    // Pad tiles (Click triggers, Pick pill or Double-click opens Pad Select!)
+    screen.querySelectorAll("[data-tv-editpad]").forEach(el => {
+      el.addEventListener("click", e => {
+        e.stopPropagation();
+        const slot = parseInt(el.dataset.tvEditpad, 10);
+        state.padSelectSlot = slot;
+        state.overlayWindow = "pad_select";
+        syncBrowserToPad(getStylePads()[slot]);
+        logAction(`Editing PAD ${slot + 1} -> Choose from ${DATA.pads.length} manual Factory Pads.`);
+        renderAll();
+      });
+    });
     screen.querySelectorAll("[data-tv-pad]").forEach(el => {
       el.addEventListener("click", () => {
         const idx = parseInt(el.dataset.tvPad, 10) + 1;
         handleButtonPress(`pad_${idx}`, false);
       });
+      el.addEventListener("dblclick", () => {
+        const idx = parseInt(el.dataset.tvPad, 10) + 1;
+        handleButtonPress(`pad_${idx}`, true);
+      });
     });
 
-    // Select window actions
+    // Select window shared controls (Hold, Close, Page, Open Search)
+    screen.querySelectorAll("[data-tv-hold]").forEach(el => {
+      el.addEventListener("click", () => {
+        state.displayHold = !state.displayHold;
+        logAction(`Display Hold ${state.displayHold ? "ON (keeps browser open)" : "OFF (auto-closes on selection)"}.`);
+        renderTouchView();
+      });
+    });
+    screen.querySelectorAll("[data-tv-close]").forEach(el => {
+      el.addEventListener("click", () => {
+        state.overlayWindow = null;
+        renderAll();
+      });
+    });
+    screen.querySelectorAll("[data-tv-opensearch]").forEach(el => {
+      el.addEventListener("click", () => {
+        state.searchScope = el.dataset.tvOpensearch || "all";
+        state.overlayWindow = "search";
+        renderTouchView();
+      });
+    });
+    screen.querySelectorAll("[data-tv-selpage]").forEach(el => {
+      el.addEventListener("click", () => {
+        const p = parseInt(el.dataset.tvSelpage, 10);
+        if (state.overlayWindow === "style_select") state.styleBrowsePage = p;
+        else if (state.overlayWindow === "kbd_lib_select") state.kbdBrowsePage = p;
+        else if (state.overlayWindow === "sound_select") state.soundBrowsePage = p;
+        else if (state.overlayWindow === "pad_select") state.padBrowsePage = p;
+        renderTouchView();
+      });
+    });
+
+    // Style Select category tabs & cards
+    screen.querySelectorAll("[data-tv-stylecat]").forEach(el => {
+      el.addEventListener("click", () => {
+        state.styleBrowseCat = el.dataset.tvStylecat;
+        state.styleBrowsePage = 0;
+        renderTouchView();
+      });
+    });
     screen.querySelectorAll("[data-tv-pickstyle]").forEach(el => {
       el.addEventListener("click", () => {
         selectStyleByIndex(parseInt(el.dataset.tvPickstyle, 10));
       });
     });
-    screen.querySelectorAll("[data-tv-stylecat]").forEach(el => {
-      el.addEventListener("click", () => {
-        const cat = el.dataset.tvStylecat;
-        const idx = DATA.styles.findIndex(s => s.category === cat);
-        if (idx >= 0) selectStyleByIndex(idx);
-      });
-    });
+
+    // Kbd Set Library category tabs & cards
     screen.querySelectorAll("[data-tv-libcat]").forEach(el => {
       el.addEventListener("click", () => {
-        state.activeLibCategory = el.dataset.tvLibcat;
-        renderAll();
+        state.kbdBrowseCat = el.dataset.tvLibcat;
+        state.kbdBrowsePage = 0;
+        renderTouchView();
       });
     });
     screen.querySelectorAll("[data-tv-picklib]").forEach(el => {
       el.addEventListener("click", () => {
-        applyLibraryKbdSet(state.activeLibCategory, parseInt(el.dataset.tvPicklib, 10));
+        const cat = state.kbdBrowseCat || state.activeLibCategory;
+        applyLibraryKbdSet(cat, parseInt(el.dataset.tvPicklib, 10));
+        if (!state.displayHold) state.overlayWindow = null;
         renderAll();
+      });
+    });
+
+    // Sound Select type tabs, track toggle, group tabs & cards
+    screen.querySelectorAll("[data-tv-soundtype]").forEach(el => {
+      el.addEventListener("click", () => {
+        const tp = el.dataset.tvSoundtype;
+        state.soundBrowseType = tp;
+        const groups = Object.keys((DATA.soundGroupsByType && DATA.soundGroupsByType[tp]) || {});
+        if (!groups.includes(state.soundBrowseGroup)) {
+          state.soundBrowseGroup = groups[0] || "Piano";
+        }
+        state.soundBrowsePage = 0;
+        renderTouchView();
+      });
+    });
+    screen.querySelectorAll("[data-tv-cycletrack]").forEach(el => {
+      el.addEventListener("click", () => {
+        const order = ["up1", "up2", "up3", "low"];
+        state.selectedTrackKey = order[(order.indexOf(state.selectedTrackKey) + 1) % order.length];
+        syncBrowserToSound(state.tracks[state.selectedTrackKey].sound);
+        renderAll();
+      });
+    });
+    screen.querySelectorAll("[data-tv-soundgroup]").forEach(el => {
+      el.addEventListener("click", () => {
+        state.soundBrowseGroup = el.dataset.tvSoundgroup;
+        state.soundBrowsePage = 0;
+        renderTouchView();
       });
     });
     screen.querySelectorAll("[data-tv-picksound]").forEach(el => {
       el.addEventListener("click", () => {
         const snd = el.dataset.tvPicksound;
-        state.tracks[state.selectedTrackKey].sound = snd;
-        state.tracks[state.selectedTrackKey].muted = false;
-        logAction(`Assigned Sound "${snd}" to ${state.selectedTrackKey.toUpperCase()}!`);
+        assignSoundToSelectedTrack(snd, "Sound Select");
+        if (!state.displayHold) state.overlayWindow = null;
         renderAll();
       });
     });
+
+    // Pad Select bank tabs, slot cycle, group tabs & cards
+    screen.querySelectorAll("[data-tv-padbank]").forEach(el => {
+      el.addEventListener("click", () => {
+        const bk = el.dataset.tvPadbank;
+        state.padBrowseBank = bk;
+        const firstGrp = (DATA.padGroups || []).find(g => g.bankType === bk);
+        if (firstGrp) state.padBrowseGroup = firstGrp.name;
+        state.padBrowsePage = 0;
+        renderTouchView();
+      });
+    });
+    screen.querySelectorAll("[data-tv-padslot]").forEach(el => {
+      el.addEventListener("click", () => {
+        state.padSelectSlot = (state.padSelectSlot + 1) % 4;
+        renderTouchView();
+      });
+    });
+    screen.querySelectorAll("[data-tv-padgroup]").forEach(el => {
+      el.addEventListener("click", () => {
+        state.padBrowseGroup = el.dataset.tvPadgroup;
+        state.padBrowsePage = 0;
+        renderTouchView();
+      });
+    });
+    screen.querySelectorAll("[data-tv-pickpad]").forEach(el => {
+      el.addEventListener("click", () => {
+        const padId = el.dataset.tvPickpad;
+        const padObj = (DATA.pads || []).find(p => p.id === padId);
+        if (padObj) {
+          assignPadToSlot(padObj, state.padSelectSlot, "Pad Select");
+          if (window.pa700Audio && padObj.type === "OneShot") {
+            window.pa700Audio.triggerPadHit(state.padSelectSlot, padObj, buildAudioState());
+          }
+          if (!state.displayHold) state.overlayWindow = null;
+          renderAll();
+        }
+      });
+    });
+
+    // SongBook Set List tiles
     screen.querySelectorAll("[data-tv-setlist]").forEach(el => {
       el.addEventListener("click", () => {
         state.setListMode = true;
         handleLibraryOrSetListButton(parseInt(el.dataset.tvSetlist, 10));
         renderAll();
+      });
+    });
+
+    // Live Search Overlay bindings (preserves input focus while filtering results!)
+    const searchInput = document.getElementById("tvSearchInput");
+    const bindSearchResultClicks = () => {
+      screen.querySelectorAll("[data-tv-searchkind]").forEach(el => {
+        el.addEventListener("click", () => {
+          const kind = el.dataset.tvSearchkind;
+          const val = el.dataset.tvSearchval;
+          if (kind === "style") {
+            selectStyleByIndex(parseInt(val, 10), { keepOverlayOpen: true });
+            state.overlayWindow = null;
+          } else if (kind === "kbd") {
+            const [catId, pcStr] = val.split(":");
+            const list = DATA.keyboardSetLibrary[catId] || [];
+            const idx = list.findIndex(k => String(k.pc) === pcStr);
+            applyLibraryKbdSet(catId, idx >= 0 ? idx : 0);
+            state.overlayWindow = null;
+          } else if (kind === "sound") {
+            assignSoundToSelectedTrack(val, "Search");
+            state.overlayWindow = null;
+          } else if (kind === "pad") {
+            const padObj = (DATA.pads || []).find(p => p.id === val);
+            if (padObj) assignPadToSlot(padObj, state.padSelectSlot, "Search");
+            state.overlayWindow = null;
+          }
+          renderAll();
+        });
+      });
+    };
+    bindSearchResultClicks();
+
+    if (searchInput) {
+      searchInput.addEventListener("input", () => {
+        state.searchQuery = searchInput.value;
+        const matches = getSearchMatches(state.searchQuery, state.searchScope);
+        const resEl = document.getElementById("tvSearchResults");
+        const cntEl = document.getElementById("tvSearchCount");
+        if (cntEl) cntEl.textContent = `${matches.length}${matches.length >= 60 ? "+" : ""} hits`;
+        if (resEl) {
+          resEl.innerHTML = renderSearchResultCards(matches);
+          bindSearchResultClicks();
+        }
+      });
+    }
+    screen.querySelectorAll("[data-tv-searchscope]").forEach(el => {
+      el.addEventListener("click", () => {
+        state.searchScope = el.dataset.tvSearchscope;
+        renderTouchView();
       });
     });
 
@@ -2481,8 +3154,9 @@
       state.photoLedOverrideAllSetList = false;
       state.subScaleNotes = [];
       state.activeSubScalePreset = null;
-      state.currentStyleIdx = 0;
-      state.tempo = DATA.styles[0].tempo;
+      state.currentStyleIdx = findStyleIndexById("brush_ballad");
+      syncBrowserToStyle(state.currentStyleIdx);
+      state.tempo = DATA.styles[state.currentStyleIdx].tempo;
       state.tempoLock = false;
       state.autoFill = true;
       state.accompOn = true;
@@ -2515,6 +3189,90 @@
         window.pa700Audio.setMuted(nextMuted);
         audioBtn.classList.toggle("active", !nextMuted);
         audioBtn.textContent = nextMuted ? "Sound: MUTED" : "Sound: ON";
+      });
+    }
+
+    // SoundFont Library Controls & Status HUD
+    const sfSelect = document.getElementById("sfLibrarySelect");
+    const sfBadge = document.getElementById("sfStatusBadge");
+    const btnUploadSf = document.getElementById("btnUploadSf");
+    const sfFileInput = document.getElementById("sfFileInput");
+
+    const renderSfStatus = (snap) => {
+      if (!snap || !sfBadge) return;
+      state.audioSfStatus = snap;
+      if (sfSelect && snap.activeId && sfSelect.value !== snap.activeId) {
+        sfSelect.value = snap.activeId;
+      }
+      sfBadge.classList.remove("warn", "drop");
+      if (snap.state === "loading") {
+        sfBadge.classList.add("warn");
+        sfBadge.textContent = snap.statusMsg || `Loading ${snap.progressPct || 0}%`;
+      } else if (snap.state === "error") {
+        sfBadge.classList.add("drop");
+        sfBadge.textContent = snap.statusMsg || "Bank fallback active";
+      } else if (snap.mode === "stream") {
+        sfBadge.textContent = snap.lastLoadMs ? `Ready (${snap.lastLoadMs}ms)` : "Streaming ready";
+      } else {
+        sfBadge.textContent = snap.statusMsg || "Ready";
+      }
+      sfBadge.title = [
+        `Library: ${snap.activeLabel}`,
+        `Status: ${snap.statusMsg}`,
+        snap.loadedPatchesCount ? `Loaded patches: ${snap.loadedPatchesCount}` : "",
+        snap.lastLoadMs ? `Last load: ${snap.lastLoadMs}ms` : ""
+      ].filter(Boolean).join(" | ");
+    };
+
+    if (window.pa700Audio) {
+      if (typeof window.pa700Audio.onStatusChange === "function") {
+        window.pa700Audio.onStatusChange(renderSfStatus);
+      }
+      if (typeof window.pa700Audio.getLibraryStatus === "function") {
+        renderSfStatus(window.pa700Audio.getLibraryStatus());
+      }
+    }
+
+    if (sfSelect) {
+      sfSelect.addEventListener("change", async () => {
+        if (!window.pa700Audio || typeof window.pa700Audio.setSoundLibrary !== "function") return;
+        await window.pa700Audio.init();
+        logAction(`Switching SoundFont engine to "${sfSelect.options[sfSelect.selectedIndex].text}"...`);
+        const res = await window.pa700Audio.setSoundLibrary(sfSelect.value);
+        logAction(`SoundFont status: ${res.statusMsg}`);
+      });
+    }
+
+    if (btnUploadSf && sfFileInput) {
+      btnUploadSf.addEventListener("click", () => sfFileInput.click());
+      sfFileInput.addEventListener("change", async () => {
+        const files = sfFileInput.files;
+        if (files && files.length && window.pa700Audio && typeof window.pa700Audio.loadLocalSoundFontFiles === "function") {
+          await window.pa700Audio.init();
+          const res = await window.pa700Audio.loadLocalSoundFontFiles(files);
+          logAction(`Loaded local SoundFont (.sf2/.sf3) into IndexedDB cache -> ${res.statusMsg}`);
+        }
+        sfFileInput.value = "";
+      });
+    }
+
+    const shellEl = document.querySelector(".app-shell");
+    if (shellEl) {
+      shellEl.addEventListener("dragover", e => {
+        if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) {
+          e.preventDefault();
+        }
+      });
+      shellEl.addEventListener("drop", async e => {
+        const files = Array.from((e.dataTransfer && e.dataTransfer.files) || [])
+          .filter(f => /\.(sf2|sf3|dls)$/i.test(f.name));
+        if (!files.length) return;
+        e.preventDefault();
+        if (window.pa700Audio && typeof window.pa700Audio.loadLocalSoundFontFiles === "function") {
+          await window.pa700Audio.init();
+          const res = await window.pa700Audio.loadLocalSoundFontFiles(files);
+          logAction(`Dropped SoundFont file(s) -> ${res.statusMsg}`);
+        }
       });
     }
 
@@ -2618,7 +3376,7 @@
     const unlockAudio = () => {
       if (window.pa700Audio) {
         window.pa700Audio.init();
-        window.pa700Audio.syncPanelControls(state);
+        window.pa700Audio.syncPanelControls(buildAudioState());
       }
     };
     window.addEventListener("mousedown", unlockAudio, { passive: true });
@@ -2630,6 +3388,8 @@
     let heldQwertyKey = null;
     window.addEventListener("keydown", e => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       const k = e.key.toLowerCase();
       if (qwertyMidiMap[k] !== undefined) {
         unlockAudio();
@@ -2669,7 +3429,7 @@
   function renderAll() {
     state.photoLedOverrideStartGreen = false;
     state.photoLedOverrideAllSetList = false;
-    if (window.pa700Audio) window.pa700Audio.syncPanelControls(state);
+    if (window.pa700Audio) window.pa700Audio.syncPanelControls(buildAudioState());
     updateKnobVisuals();
     updateLedVisuals();
     renderTouchView();

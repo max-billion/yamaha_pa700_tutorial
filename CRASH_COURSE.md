@@ -22,11 +22,11 @@ Look at the **9 tall buttons on the bottom-right** (`PIANO & EP`, `ORGAN`, `GUIT
 1. **CRITICAL GIG CHECK**: Look at the **`SET LIST`** button immediately to the left of `PIANO & EP`:
    - **LED OFF** = **Voice Library Mode** (pressing `ORGAN` gives you an Organ, pressing `BRASS` gives you Brass).
    - **LED ON (Red)** = **SongBook Set List Mode** (those 9 buttons now act as numbered song presets `1–9` and will change your Style and Tempo too!). **Turn `SET LIST` OFF** if you just want instrument categories.
-2. Press any category button (e.g. `PIANO & EP` or `SAX&WOOD.`) to load the first voice in that family and open the **Keyboard Set Select** grid on the TouchView screen.
-3. Tap any of the 8 big tiles on the touchscreen (or press `P1–P6` tabs at the bottom of the screen), then press **`EXIT`** (right of screen) if you want to return to the Main page.
+2. Press any category button (e.g. `PIANO & EP` or `SAX&WOOD.`) to load the first voice in that family and open the **Keyboard Set Library (`298` manual Sets)** browser on the TouchView screen. Press the same button repeatedly to step through sets (e.g. all `40` Organ sets or `48` Piano sets).
+3. Tap any slot in the `2×4` TouchView grid (or use **`P1–P6`** bank pills at the bottom). Toggle **`HOLD`** in the top-right of the TouchView bar to keep the browser open while auditioning, or turn **`HOLD` OFF** so tapping an item auto-closes back to the Main Page; press **`EXIT`** at any time to close.
 
 ### Way B — `KEYBOARD SET 1 – 4` Directly Under the Screen (Matched to Your Style)
-Every Style on the Pa700 comes with **4 curated Keyboard Sets** tailored to that genre, displayed in the 4 boxes along the bottom of the Main screen directly above physical buttons **`1`, `2`, `3`, `4`**:
+Every Style on the Pa700 (`379` Factory Styles across `12` genres) comes with **4 curated Keyboard Sets** tailored to that groove, displayed in the 4 boxes along the bottom of the Main screen directly above physical buttons **`1`, `2`, `3`, `4`**:
 - Press **`1`** for the sparse/verse voice, **`2`** or **`3`** for solo/chorus voices, **`4`** for the big lead/climax voice.
 - **Pro Tip — `STYLE TO KBD SET` (round button left of `STYLE SELECT`)**:
   - **LED Off**: Changing Styles or Variations *never* changes your voice (safest if you want to stay on Piano all song!).
@@ -35,12 +35,14 @@ Every Style on the Pa700 comes with **4 curated Keyboard Sets** tailored to that
 
 ### Way C — `"Panic Home" Piano`: The `MY SETTING` Button
 Lost in menus or stuck on a weird synth patch?
-- Press **`MY SETTING`** (white-boxed label on the bottom row, left of `SONG BOOK`). It immediately restores your default startup Piano setup (`Concert Grand` on `UP1`).
+- Press **`MY SETTING`** (white-boxed label on the bottom row, left of `SONG BOOK`). It immediately restores your default startup Piano setup (`Concert Grand` on `UP1`). *(Long-press `MY SETTING` to save your current voices as your default!)*
 
-### Way D — Layering or Swapping Individual Voices (`UP1 / UP2 / UP3 / LOW`) on Screen
+### Way D — Layering or Swapping Individual Sounds (`1,845` Factory + Legacy + GM/XG + `DNC`)
 On the right half of the **Style Play Main Page** (press `STYLE PLAY` then `EXIT` to guarantee you're there), you see 4 stacked rows (`UP1`, `UP2`, `UP3`, `LOW`):
-- **Layer a 2nd voice instantly**: Tap the **`MUTE` icon** on `UP2` or `UP3` so it turns into a play icon—now Piano + Strings play together!
-- **Swap a single layer's voice**: Tap the Sound name once to highlight the row, then **tap it a second time** to open the Sound Select window (or turn the silver **`VALUE` dial**).
+- **Layer a 2nd voice instantly**: Tap the **`MUTE / PLAY`** button on `UP2` or `UP3`—now Piano + Strings play together!
+- **Swap a single layer's Sound**: Tap the Sound name once to highlight the row, then **tap it a second time** (or press the `SOUND` Mode button) to open **Sound Select** with **all 1,845 manual Sounds** (`1,727 melodic Sounds + 118 Drum Kits`):
+  - Switch between **`Factory`**, **`Legacy`**, and **`GM/XG`** tabs at the top, pick a category column on the left/right (`Piano`, `E. Piano`, `Mallet & Bell`, `Organ`, `Guitar`, `Strings & Vocal`, `Brass`, `Sax`, `Woodwind`, `Synth`, `Ethnic`, `Bass`, `Drum & SFX`), and step with `P1–P9` or the **`VALUE`** dial.
+  - Sounds marked **`DNC`** (Defined Nuance Control — 52 manual sounds like `Tenor Sax DN1`) respond live to **`SW 1`**, **`SW 2`**, and Joystick **`Y+ / Y-`** (their active articulation strip appears in Sound Select and in the amber `DNC` pill in the Audio HUD).
 - **Octave & Key Shifts**: Use **`UPPER OCTAVE - / +`** (shifts your right-hand pitch up/down octaves) and **`TRANSPOSE ♭ / ♯`** (transposes the entire keyboard & band in semitones; press both `-` and `+` together to reset to `0`).
 
 ---
@@ -62,7 +64,7 @@ Look at the **`SPLIT`** button (right panel, between `METRONOME` and `ENSEMBLE`)
 ## 4. Running the Auto-Arranger Live (Step-by-Step Song Workflow)
 
 ### Step 1: Pre-Song Checklist (5 Seconds Before Counting Off)
-1. Press **`STYLE PLAY`** (top-left Mode section), then **`STYLE SELECT`** (or tap the orange Style name on screen) to pick your groove; press **`EXIT`**.
+1. Press **`STYLE PLAY`** (top-left Mode section), then **`STYLE SELECT`** (or tap the Style box on screen) to browse all **379 Factory Styles** across 12 genre tabs (`Pop` through `World`) and `P1–P5` pages; press **`EXIT`**. *(Need an exact groove fast? Press **`🔍 SEARCH`** to filter across all 379 Styles, 298 Kbd Sets, 1,845 Sounds, and 415 Pads live!)*
 2. Adjust speed with **`TEMPO - / +`** (or hold `SHIFT` + spin **`VALUE`** for fast jumps; press **`LOCK`** 🔒 if you don't want switching Styles to change your BPM).
 3. Check the 3 left-hand LEDs (middle-left row):
    - **`SPLIT`** = **ON** (so left hand stays out of your melody range)
@@ -95,3 +97,12 @@ Press one of the **`ENDING`** buttons (or `FADE IN/OUT`)—the Arranger will pla
 - **`ENDING 2`**: Ending riff **holding your recognized chord** (waits until the current measure finishes).
 - **`ENDING 3`**: **Immediate 2-measure punch ending**—starts *right away* without waiting for the end of the bar (lifesaver if a singer cuts a song short!).
 - **`FADE IN/OUT`** (round button right of `START/STOP`): Smoothly fades the whole band down to silence and stops (or starts from silence if pressed while stopped).
+
+---
+
+## 5. Triggering & Assigning Pads (`415` Factory Pads) & SoundFont Selector
+
+- **Trigger Pads 1–4**: Press **`PAD 1–4`** (lower-left above the Arranger strip) to fire One-Shot percussion/FX hits (`HIT`) or tempo-synced rhythmic loops (`SEQ`). Press **`STOP`** immediately right of `PAD 4` to silence all active Pads.
+- **Assign Any of the 415 Manual Pads**: Double-click **`PAD 1–4`** (or open the **`Pad`** bottom tab on TouchView and click **`Pick`**) to open **Pad Select** across all `20` `HIT` & `SEQ` banks.
+- **SoundFont Audio Engine (Top HUD)**: Switch between **`FluidR3 GM (Stream)`**, **`GeneralUser GS (.sf3/.sf2)`**, **`MuseScore General (.sf3)`**, **`FreePats GM (.sf2 Stack via + .sf2)`**, and **`Procedural WebAudio (Offline)`**. Streamed instrument banks download on demand and cache in memory; keys released before a patch finishes downloading suppress delayed ghost notes.
+

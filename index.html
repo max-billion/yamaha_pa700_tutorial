@@ -147,10 +147,25 @@
             <span></span><span></span><span></span><span></span><span></span><span></span>
           </div>
         </div>
+        <div class="hud-sf-wrap" title="SoundFont Library">
+          <select id="sfLibrarySelect" class="sf-select" aria-label="SoundFont Library">
+            <option value="fluidr3_stream">FluidR3 GM (Stream)</option>
+            <option value="generaluser">GeneralUser GS (.sf3 8MB)</option>
+            <option value="generaluser_full">GeneralUser GS (.sf2 31MB)</option>
+            <option value="fluidr3_full">FluidR3 Mono (.sf3 23MB)</option>
+            <option value="musescore">MuseScore General (.sf3 49MB)</option>
+            <option value="freepats">FreePats GM (.sf2 Stack)</option>
+            <option value="procedural">Procedural WebAudio (Offline)</option>
+          </select>
+          <span id="sfStatusBadge" class="sf-status-badge" title="Active SoundFont status">Ready</span>
+          <button id="btnUploadSf" type="button" class="tb-btn sf-upload-btn" title="Upload FreePats GM .sf2 or custom .sf2/.sf3 SoundFont">+ .sf2</button>
+          <input id="sfFileInput" type="file" accept=".sf2,.sf3,.dls" multiple hidden />
+        </div>
       </div>
 
       <div class="audio-hud-pills">
-        <span id="hudPillVoice" class="hud-pill voice">Concert Grand</span>
+        <span id="hudPillVoice" class="hud-pill voice" title="Active Upper 1 Sound">Concert Grand</span>
+        <span id="hudPillDnc" class="hud-pill dnc" style="display:none;" title="DNC Articulation Map">DNC</span>
         <span id="hudPillStyle" class="hud-pill style">Brush Ballad • 73 BPM</span>
         <span id="hudPillChord" class="hud-pill chord">Chord: ---</span>
         <span id="hudPillSplit" class="hud-pill split">Split: C4</span>
@@ -234,6 +249,7 @@
     </section>
   </div>
 
+  <script type="module" src="./vendor/spessasynth/spessasynth_bridge.js"></script>
   <script src="pa700_data.js"></script>
   <script src="pa700_audio.js"></script>
   <script src="app.js"></script>

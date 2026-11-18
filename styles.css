@@ -1627,3 +1627,328 @@ html, body {
   outline: 3px solid #10b981;
   z-index: 4;
 }
+
+/* SoundFont Library Controls in Audio HUD */
+.hud-sf-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.sf-select {
+  background: #141a24;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 2px 6px;
+  max-width: 175px;
+  cursor: pointer;
+}
+
+.sf-status-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  white-space: nowrap;
+}
+
+.sf-status-badge.warn {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.sf-status-badge.drop {
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.sf-upload-btn {
+  padding: 2px 6px !important;
+  font-size: 10px !important;
+}
+
+.hud-pill.dnc {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+/* =========================================================================
+   KORG PA700 TOUCHVIEW SELECT WINDOW (STYLE / KBD SET / SOUND / PAD / SEARCH)
+   ========================================================================= */
+.tv-select-win {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: linear-gradient(180deg, #1b2434 0%, #101622 100%);
+  color: #e6edf7;
+  border-radius: 3px;
+  overflow: hidden;
+  font-size: 9px;
+}
+
+.tv-sel-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 6px;
+  background: linear-gradient(180deg, #2b3952 0%, #1c2638 100%);
+  border-bottom: 1px solid #3f5275;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tv-sel-title {
+  font-weight: 700;
+  font-size: 10px;
+  color: #f8fafc;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.tv-type-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.tv-type-tab {
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tv-type-tab.active {
+  background: linear-gradient(180deg, #f59e0b, #d97706);
+  color: #111827;
+  border-color: #fbbf24;
+}
+
+.tv-hold-btn {
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 8.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tv-hold-btn.active {
+  background: #0ea5e9;
+  color: #082f49;
+  border-color: #38bdf8;
+}
+
+.tv-close-btn {
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid #64748b;
+  background: #334155;
+  color: #f8fafc;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tv-sel-body {
+  display: grid;
+  grid-template-columns: 74px 1fr 74px;
+  flex: 1;
+  min-height: 0;
+  gap: 3px;
+  padding: 3px;
+}
+
+.tv-cat-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.tv-cat-tab {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid #334155;
+  background: linear-gradient(180deg, #1f293a, #151d2b);
+  color: #cbd5e1;
+  font-size: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-cat-tab.active {
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  color: #ffffff;
+  border-color: #60a5fa;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.tv-cat-tab.empty {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.tv-col-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(4, 1fr);
+  grid-auto-flow: column;
+  gap: 3px;
+  min-height: 0;
+}
+
+.tv-slot-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2px 5px;
+  border-radius: 3px;
+  border: 1px solid #334155;
+  background: linear-gradient(180deg, #222d40 0%, #17202e 100%);
+  color: #e2e8f0;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  transition: border-color 0.1s ease, background 0.1s ease;
+}
+
+.tv-slot-card:hover {
+  border-color: #60a5fa;
+}
+
+.tv-slot-card.active {
+  background: linear-gradient(180deg, #d97706 0%, #b45309 100%);
+  border-color: #fde68a;
+  color: #ffffff;
+}
+
+.tv-slot-card.blank {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.tv-slot-name {
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-slot-sub {
+  font-size: 7.5px;
+  opacity: 0.78;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-bank-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 6px;
+  background: #141b29;
+  border-top: 1px solid #334155;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tv-bank-pills {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.tv-page-pill {
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-size: 8.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tv-page-pill.active {
+  background: #2563eb;
+  border-color: #60a5fa;
+  color: #ffffff;
+}
+
+/* Search Overlay */
+.tv-search-win {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #111827;
+  color: #e5e7eb;
+  padding: 4px;
+  gap: 4px;
+}
+
+.tv-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tv-search-input {
+  flex: 1;
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 10px;
+}
+
+.tv-search-results {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  align-content: start;
+}
+
+.tv-dnc-strip {
+  font-size: 8px;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 2px;
+  padding: 1px 5px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
